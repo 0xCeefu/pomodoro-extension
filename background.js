@@ -5,15 +5,15 @@ let isFocus = true;
 let timeLeft = 0;
 let pomodoroActive = false;
 
-async function startTimer(params) {
+async function startTimer(reqIsFocus, reqFocusDuration, reqBreakDuration) {
     if (timerInterval) return;
 
-    if (isFocus && timeLeft <= 0) {
-        timeLeft = focusDuration * 60;
+    if (timeLeft <= 0) {
+        isFocus = reqIsFocus
+        focusDuration = reqFocusDuration || focusDuration;
+        breakDuration = reqBreakDuration || breakDuration;
+        timeLeft = isFocus ? focusDuration * 60 : breakDuration * 60;
         console.log("Focus");
-    } else if (!isFocus && timeLeft <= 0) {
-        timeLeft = breakDuration * 60;
-        console.log("Break");
     }
 
     chrome.action.setBadgeBackgroundColor(
@@ -29,7 +29,7 @@ async function startTimer(params) {
             timerInterval = null;
             showNotification(`Pomodoro ${isFocus ? "Focus" : "Break"} session complete!`);
             isFocus = !isFocus;
-            startTimer();
+            startTimer(isFocus);
         }
     }, 1000);
 }
@@ -43,9 +43,7 @@ async function sendMsgToUpdateUI() {
     chrome.runtime.sendMessage({
         action: 'updateTimerDisplay',
         timeLeft: timeLeft,
-        isFocus: isFocus,
-        focusDuration: focusDuration,
-        breakDuration: breakDuration
+        pomodoroActive: pomodoroActive
     }).catch((error) => {
         console.warn('No receiver for updateUI — popup may be closed.');
     });
@@ -63,12 +61,28 @@ function showNotification(message) {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'startPomodoro') {
         console.log('Received startPomodoro message:', request);
-        focusDuration = request.focusDuration || focusDuration;
-        breakDuration = request.breakDuration || breakDuration;
-        timeLeft = isFocus ? focusDuration * 60 : breakDuration * 60;
         pomodoroActive = true;
-        isFocus = request.isFocus !== undefined ? request.isFocus : isFocus;
-        startTimer();
+        
+        startTimer(request.isFocus, request.focusDuration, request.breakDuration);
         sendResponse({ status: 'Pomodoro started' });
+    } else if (request.action === 'stopPomodoro') {
+        console.log('Received stopPomodoro message:', request);
+        clearInterval(timerInterval);
+        timerInterval = null;
+        pomodoroActive = false;
+        sendResponse({ status: 'Pomodoro stopped' });
+    } else if (request.action === 'resetPomodoro') {
+        console.log('Received resetPomodoro message:', request);
+        clearInterval(timerInterval);
+        timerInterval = null;
+        timeLeft = 0;
+        pomodoroActive = false;
+        isFocus = true;
+        sendMsgToUpdateUI();
+        chrome.action.setBadgeText({ text: '' });
+        sendResponse({ status: 'Pomodoro reset' });
+    } else {
+        console.warn('Unknown action:', request.action);
+        sendResponse({ status: 'Unknown action' });
     }
 });
