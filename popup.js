@@ -16,10 +16,16 @@ function updateTimerDisplay() {
     if (pomodoroActive) {
         const minutes = Math.floor(timeLeft / 60);
         const seconds = timeLeft % 60;
+        chrome.action.setBadgeText(
+            { text: `${minutes}:${seconds.toString().padStart(2, '0')}` }
+        );
         document.getElementById('timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     } else {
         const minutes = Math.floor((focusDuration * 60) / 60);
         const seconds = (focusDuration * 60) % 60;
+        chrome.action.setBadgeText(
+            { text: `${minutes}:${seconds.toString().padStart(2, '0')}` }
+        );
         document.getElementById('timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
 
@@ -36,6 +42,10 @@ function startTimer() {
         timeLeft = breakDuration * 60;
         console.log("Break");
     }
+
+    chrome.action.setBadgeBackgroundColor(
+        { color: isFocus ? '#00FF00' : '#fa0000ff' }
+    );
 
     timerInterval = setInterval(() => {
         timeLeft--;
