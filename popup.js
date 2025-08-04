@@ -1,6 +1,7 @@
 const startButton = document.getElementById('start');
 const stopButton = document.getElementById('stop');
 const resetButton = document.getElementById('reset');
+const sendToBgBtn = document.getElementById('sendToBg');
 const focusDurationInput = document.getElementById('focus-duration');
 const breakDurationInput = document.getElementById('break-duration');
 
@@ -11,6 +12,15 @@ let timeLeft = 0;
 let pomodoroActive = false;
 
 let timerInterval = null;
+
+function updateUI(focusDuration, breakDuration, timeLeft) {
+    const minutes = Math.floor(timeLeft / 60);
+    const seconds = timeLeft % 60;
+    // chrome.action.setBadgeText(
+    //     { text: `${minutes}:${seconds.toString().padStart(2, '0')}` }
+    // );
+    document.getElementById('timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
 
 function updateTimerDisplay() {
     if (pomodoroActive) {
@@ -23,9 +33,6 @@ function updateTimerDisplay() {
     } else {
         const minutes = Math.floor((focusDuration * 60) / 60);
         const seconds = (focusDuration * 60) % 60;
-        chrome.action.setBadgeText(
-            { text: `${minutes}:${seconds.toString().padStart(2, '0')}` }
-        );
         document.getElementById('timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
 
@@ -104,5 +111,18 @@ breakDurationInput.addEventListener('change', () => {
     breakDuration = breakDurationInput.value;
     updateTimerDisplay();
 });
+
+sendToBgBtn.addEventListener('click', async () => {
+    let response = await chrome.runtime.sendMessage({ action: 'startPomodoro', focusDuration, breakDuration, isFocus });
+    console.log(response);
+});
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'updateTimerDisplay') {
+        console.log('Received updateTimerDisplay message:', request);
+        updateUI(request.focusDuration, request.breakDuration, request.timeLeft);
+    }
+});
+
 
 updateTimerDisplay()
