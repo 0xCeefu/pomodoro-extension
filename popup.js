@@ -12,6 +12,21 @@ let pomodoroActive = false;
 
 let timerInterval = null;
 
+function updateUI(timeLeft, pomodoroActive) {
+    if (pomodoroActive) {
+        const minutes = Math.floor(timeLeft / 60);
+        const seconds = timeLeft % 60;
+        // chrome.action.setBadgeText(
+        //     { text: `${minutes}:${seconds.toString().padStart(2, '0')}` }
+        // );
+        document.getElementById('timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    } else {
+        const minutes = Math.floor((focusDuration * 60) / 60);
+        const seconds = (focusDuration * 60) % 60;
+        document.getElementById('timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+}
+
 function updateTimerDisplay() {
     if (pomodoroActive) {
         const minutes = Math.floor(timeLeft / 60);
@@ -23,9 +38,6 @@ function updateTimerDisplay() {
     } else {
         const minutes = Math.floor((focusDuration * 60) / 60);
         const seconds = (focusDuration * 60) % 60;
-        chrome.action.setBadgeText(
-            { text: `${minutes}:${seconds.toString().padStart(2, '0')}` }
-        );
         document.getElementById('timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
 
@@ -83,16 +95,19 @@ function resetTimer() {
     updateTimerDisplay();
 }
 
-startButton.addEventListener('click', () => {
-    startTimer();
+startButton.addEventListener('click', async () => {
+    let response = await chrome.runtime.sendMessage({ action: 'startPomodoro', focusDuration, breakDuration, isFocus });
+    console.log(response);
 });
 
-stopButton.addEventListener('click', () => {
-    pauseTimer();
+stopButton.addEventListener('click', async () => {
+    let response = await chrome.runtime.sendMessage({ action: 'stopPomodoro' });
+    console.log(response);
 });
 
-resetButton.addEventListener('click', () => {
-    resetTimer();
+resetButton.addEventListener('click', async () => {
+    let response = await chrome.runtime.sendMessage({ action: 'resetPomodoro' });
+    console.log(response);
 });
 
 focusDurationInput.addEventListener('change', () => {
@@ -104,5 +119,13 @@ breakDurationInput.addEventListener('change', () => {
     breakDuration = breakDurationInput.value;
     updateTimerDisplay();
 });
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'updateTimerDisplay') {
+        console.log('Received updateTimerDisplay message:', request);
+        updateUI(request.timeLeft, request.pomodoroActive);
+    }
+});
+
 
 updateTimerDisplay()
