@@ -20,7 +20,8 @@
         "default_title": "Pomodoro Timer"
     },
     "permissions": [
-        "notifications"
+        "notifications",
+        "storage"
     ],
     "background": {
         "service_worker": "background.js"
