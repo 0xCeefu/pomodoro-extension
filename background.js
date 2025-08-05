@@ -5,6 +5,12 @@ let isFocus = true;
 let timeLeft = 0;
 let pomodoroActive = false;
 
+chrome.runtime.onInstalled.addListener(() => {
+    chrome.storage.sync.set({ timeLeftStored: focusDuration * 60 }).then(() => {
+        console.log(`Time left stored: ${focusDuration * 60}`);
+    });
+});
+
 async function startTimer(reqIsFocus, reqFocusDuration, reqBreakDuration) {
     if (timerInterval) return;
 
@@ -13,16 +19,27 @@ async function startTimer(reqIsFocus, reqFocusDuration, reqBreakDuration) {
         focusDuration = reqFocusDuration || focusDuration;
         breakDuration = reqBreakDuration || breakDuration;
         timeLeft = isFocus ? focusDuration * 60 : breakDuration * 60;
-        console.log("Focus");
+        // console.log("Focus");
     }
 
     chrome.action.setBadgeBackgroundColor(
         { color: isFocus ? '#00FF00' : '#fa0000ff' }
     );
 
+    chrome.storage.sync.get(['timeLeftStored']).then((result) => {
+        if (result.timeLeftStored) {
+            console.log(`Restored time left: ${result.timeLeftStored}`);
+        }
+    }).catch((error) => {
+        console.error('Error retrieving timeLeftStored:', error);
+    });
+
     timerInterval = setInterval(() => {
         timeLeft--;
         sendMsgToUpdateUI();
+        chrome.storage.sync.set({ timeLeftStored: timeLeft }).then(() => {
+            console.log(`Time left stored: ${timeLeft}`);
+        });
 
         if (timeLeft <= 0) {
             clearInterval(timerInterval);
@@ -60,19 +77,19 @@ function showNotification(message) {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'startPomodoro') {
-        console.log('Received startPomodoro message:', request);
+        // console.log('Received startPomodoro message:', request);
         pomodoroActive = true;
-        
+
         startTimer(request.isFocus, request.focusDuration, request.breakDuration);
         sendResponse({ status: 'Pomodoro started' });
     } else if (request.action === 'stopPomodoro') {
-        console.log('Received stopPomodoro message:', request);
+        // console.log('Received stopPomodoro message:', request);
         clearInterval(timerInterval);
         timerInterval = null;
         pomodoroActive = false;
         sendResponse({ status: 'Pomodoro stopped' });
     } else if (request.action === 'resetPomodoro') {
-        console.log('Received resetPomodoro message:', request);
+        // console.log('Received resetPomodoro message:', request);
         clearInterval(timerInterval);
         timerInterval = null;
         timeLeft = 0;
@@ -80,6 +97,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         isFocus = true;
         sendMsgToUpdateUI();
         chrome.action.setBadgeText({ text: '' });
+        chrome.storage.sync.set({ timeLeftStored: 0 }).then(() => {
+            console.log(`Time left reset to: ${0}`);
+        });
         sendResponse({ status: 'Pomodoro reset' });
     } else {
         console.warn('Unknown action:', request.action);
