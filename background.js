@@ -7,10 +7,12 @@ let isFocus = true;
 let timeLeft = 0;
 let pomodoroActive = false;
 let completedPomodoros = 0;
+let soundOff = false;
+let creating
 
 chrome.runtime.onInstalled.addListener(() => {
-    chrome.storage.sync.set({ timeLeftStored: focusDuration * 60, focusDurationDefault: focusDuration, breakDurationDefault: breakDuration, pomodoroActiveStored: pomodoroActive, completedPomodoros: completedPomodoros, longBreakDuration: longBreakDuration, pomodorosBeforeLongBreak: pomodorosBeforeLongBreak }).then(() => {
-        console.log(`Time left stored: ${focusDuration * 60}\nFocus duration default: ${focusDuration}\nBreak duration default: ${breakDuration}\nPomodoro active stored: ${pomodoroActive}\nCompleted Pomodoros: ${completedPomodoros}\nLong Break Duration Default: ${longBreakDuration}\nPomodoros before Long Break: ${pomodorosBeforeLongBreak}`);
+    chrome.storage.sync.set({ timeLeftStored: focusDuration * 60, focusDurationDefault: focusDuration, breakDurationDefault: breakDuration, pomodoroActiveStored: pomodoroActive, completedPomodoros: completedPomodoros, longBreakDuration: longBreakDuration, pomodorosBeforeLongBreak: pomodorosBeforeLongBreak, soundOff: soundOff }).then(() => {
+        console.log(`Time left stored: ${focusDuration * 60}\nFocus duration default: ${focusDuration}\nBreak duration default: ${breakDuration}\nPomodoro active stored: ${pomodoroActive}\nCompleted Pomodoros: ${completedPomodoros}\nLong Break Duration Default: ${longBreakDuration}\nPomodoros before Long Break: ${pomodorosBeforeLongBreak}\nSound Off: ${soundOff}`);
     });
 });
 
@@ -87,13 +89,53 @@ async function sendMsgToUpdateUI() {
     });
 }
 
-function showNotification(message) {
+async function showNotification(message) {
+    soundOff = await chrome.storage.sync.get('soundOff').then(data => data.soundOff || false);
+    if (!soundOff) {
+        await setupOffscreenDocument('offscreen.html')
+        let response = chrome.runtime.sendMessage({
+            action: 'playAudioNotification'
+        }).catch((error) => {
+            console.warn('No receiver for playAudioNotification — offscreen document may not be set up.');
+        });
+
+        console.log('Audio notification response:', response);
+    } else {
+        console.log('Audio notification is turned off.');
+    }
     chrome.notifications.create({
         type: "basic",
         title: "Pomodoro Timer",
         message: message,
-        iconUrl: "icons/icon128.png"
+        iconUrl: "assets/icons/icon128.png"
     });
+}
+
+async function setupOffscreenDocument(path) {
+    // Check all windows controlled by the service worker to see if one
+    // of them is the offscreen document with the given path
+    const offscreenUrl = chrome.runtime.getURL(path);
+    const existingContexts = await chrome.runtime.getContexts({
+        contextTypes: ['OFFSCREEN_DOCUMENT'],
+        documentUrls: [offscreenUrl]
+    });
+
+    if (existingContexts.length > 0) {
+        return;
+    }
+
+    // create offscreen document
+    if (creating) {
+        await creating;
+    } else {
+        creating = chrome.offscreen.createDocument({
+            url: path,
+            reasons: ['AUDIO_PLAYBACK'],
+            justification: 'Play Audio Notification for Pomodoro Timer',
+        });
+        await creating;
+        creating = null;
+    }
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
