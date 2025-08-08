@@ -6,6 +6,7 @@ const breakDurationInput = document.getElementById('break-duration');
 const longBreakDurationInput = document.getElementById('long-break-duration');
 const pomodorosBeforeLongBreakInput = document.getElementById('pomodoros-before-long-break');
 const completedPomodorosDisplay = document.getElementById('completed-pomodoros');
+const soundOffButton = document.getElementById('sound-off');
 
 let isFocus = true;
 let focusDuration = focusDurationInput.value;
@@ -15,6 +16,7 @@ let pomodorosBeforeLongBreak = pomodorosBeforeLongBreakInput.value;
 let completedPomodoros = 0;
 let timeLeft = 0;
 let pomodoroActive = false;
+let soundOff = false;
 
 let timerInterval = null;
 
@@ -23,7 +25,7 @@ async function restoreTimeLeft() {
 
     if (storedTimeLeft.timeLeftStored) {
         timeLeft = storedTimeLeft.timeLeftStored;
-        console.log(`Restored time left from popup: ${timeLeft}`);
+        // console.log(`Restored time left from popup: ${timeLeft}`);
     } else {
         timeLeft = focusDuration * 60; // Default to focus duration if no stored time
     }
@@ -31,7 +33,7 @@ async function restoreTimeLeft() {
 }
 
 async function restoreUserSettings() {
-    let settings = await chrome.storage.sync.get(['focusDurationDefault', 'breakDurationDefault', 'pomodoroActiveStored', 'longBreakDuration', 'completedPomodoros', 'pomodorosBeforeLongBreak']);
+    let settings = await chrome.storage.sync.get(['focusDurationDefault', 'breakDurationDefault', 'pomodoroActiveStored', 'longBreakDuration', 'completedPomodoros', 'pomodorosBeforeLongBreak', 'soundOff']);
     if (settings.focusDurationDefault) {
         focusDuration = settings.focusDurationDefault;
         focusDurationInput.value = focusDuration;
@@ -55,7 +57,11 @@ async function restoreUserSettings() {
         pomodorosBeforeLongBreak = settings.pomodorosBeforeLongBreak;
         pomodorosBeforeLongBreakInput.value = pomodorosBeforeLongBreak;
     }
-    console.log(`Restored user settings: Focus Duration - ${focusDuration}, Break Duration - ${breakDuration}, Pomodoro Active - ${pomodoroActive}`);
+    if (settings.soundOff !== undefined) {
+        soundOff = settings.soundOff;
+        soundOffButton.classList.toggle('active', soundOff);
+    }
+    // console.log(`Restored user settings: Focus Duration - ${focusDuration}, Break Duration - ${breakDuration}, Pomodoro Active - ${pomodoroActive}`);
 }
 
 async function updateUserSettings(setting, value) {
@@ -64,20 +70,20 @@ async function updateUserSettings(setting, value) {
 
 function updateUI(timeLeft, pomodoroActive) {
     if (pomodoroActive) {
-        console.log(typeof (timeLeft));
+        // console.log(typeof (timeLeft));
         const minutes = Math.floor(timeLeft / 60);
         const seconds = timeLeft % 60;
         pomodoroActive = pomodoroActive
         // chrome.action.setBadgeText(
         //     { text: `${minutes}:${seconds.toString().padStart(2, '0')}` }
         // );
-        console.log(`seconds: ${seconds}`);
-        console.log(`minutes: ${minutes}`);
+        // console.log(`seconds: ${seconds}`);
+        // console.log(`minutes: ${minutes}`);
         document.getElementById('timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     } else {
         const minutes = Math.floor((focusDuration * 60) / 60);
         const seconds = (focusDuration * 60) % 60;
-        console.log(`Updating UI: ${minutes}:${seconds.toString().padStart(2, '0')}`);
+        // console.log(`Updating UI: ${minutes}:${seconds.toString().padStart(2, '0')}`);
         document.getElementById('timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
 }
@@ -164,6 +170,12 @@ pomodorosBeforeLongBreakInput.addEventListener('change', () => {
         }
     });
 });
+
+soundOffButton.addEventListener('click', async () => {
+    soundOffButton.classList.toggle('active');
+    soundOff = !soundOff;
+    updateUserSettings('soundOff', soundOff);
+})
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'updateTimerDisplay') {

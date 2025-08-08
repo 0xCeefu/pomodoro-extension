@@ -26,3 +26,29 @@ button {
     color: white;
     background-color: #007bff;
 }
+
+.sound-off {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.3s ease;
+}
+
+.sound-off:hover {
+    opacity: 0.8;
+}
+
+.hidden {
+    display: none;
+}
+
+.sound-off.active img:first-child {
+    display: none;
+}
+
+.sound-off.active img:last-child {
+    display: inline-block;
+}
