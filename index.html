@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Progress Ring Test</title>
+    <style>
+        :root {
+            --focus: #4f46e5;
+            /* indigo */
+            --break: #059669;
+            /* green */
+            --track: #e6e6e6;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            background: #fafafa;
+            color: #111;
+            margin: 0;
+            padding: 24px;
+            display: grid;
+            place-items: center;
+            min-height: 100vh;
+        }
+
+        .card {
+            background: white;
+            padding: 20px 18px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, .06);
+            width: min(420px, 92vw);
+        }
+
+        h1 {
+            font-size: 18px;
+            margin: 0 0 14px;
+        }
+
+        .clock {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            margin: 12px auto 20px;
+            display: grid;
+            place-items: center;
+        }
+
+        .ring {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .track {
+            fill: none;
+            stroke: var(--track);
+            stroke-width: 12;
+        }
+
+        .progress {
+            fill: none;
+            stroke: var(--focus);
+            stroke-width: 12;
+            stroke-linecap: round;
+            transition: stroke 220ms ease;
+        }
+
+        .center {
+            position: absolute;
+            text-align: center;
+        }
+
+        #session-label {
+            font-weight: 600;
+            font-size: 12px;
+            opacity: .7;
+            margin-bottom: 6px;
+        }
+
+        #time-label {
+            font-weight: 700;
+            font-size: 28px;
+            letter-spacing: 0.5px;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+
+        .row label {
+            font-size: 13px;
+            opacity: .8;
+        }
+
+        input[type="number"] {
+            width: 100px;
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+        }
+
+        button {
+            padding: 9px 12px;
+            border: none;
+            border-radius: 12px;
+            background: #111;
+            color: #fff;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        button.secondary {
+            background: #efefef;
+            color: #111;
+        }
+
+        button.warn {
+            background: #e11d48;
+        }
+
+        .spacer {
+            flex: 1;
+        }
+
+        .muted {
+            font-size: 12px;
+            opacity: .6;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h1>SVG Progress Ring — Timer Prototype</h1>
+
+        <div class="clock">
+            <svg viewBox="0 0 120 120" class="ring" aria-hidden="true">
+                <circle cx="60" cy="60" r="54" class="track"></circle>
+                <circle cx="60" cy="60" r="54" class="progress" id="progress-ring"></circle>
+            </svg>
+            <div class="center">
+                <div id="session-label">Focus</div>
+                <div id="time-label">25:00</div>
+            </div>
+        </div>
+
+        <div class="row">
+            <label>Total seconds:</label>
+            <input type="number" id="total-seconds" value="1500" min="10" step="5" />
+            <div class="spacer"></div>
+            <span class="muted">Edit → Reset to apply</span>
+        </div>
+
+        <div class="row">
+            <button id="start">Start</button>
+            <button id="pause" class="secondary">Pause</button>
+            <button id="reset" class="secondary">Reset</button>
+            <button id="toggle-session" class="secondary">Toggle Focus/Break</button>
+        </div>
+
+        <div class="row">
+            <label><input type="checkbox" id="simulate-endat" checked /> Use endAt (smooth)</label>
+            <div class="spacer"></div>
+            <span class="muted">Uncheck to step once/sec</span>
+        </div>
+    </div>
+
+    <script>
+        // Geometry
+        const R = 54;
+        const CIRC = 2 * Math.PI * R;
+
+        // DOM
+        const ring = document.getElementById('progress-ring');
+        const timeLabel = document.getElementById('time-label');
+        const sessionLabel = document.getElementById('session-label');
+        const totalInput = document.getElementById('total-seconds');
+        const startBtn = document.getElementById('start');
+        const pauseBtn = document.getElementById('pause');
+        const resetBtn = document.getElementById('reset');
+        const toggleBtn = document.getElementById('toggle-session');
+        const useEndAtEl = document.getElementById('simulate-endat');
+
+        // Initial ring dash config
+        ring.style.strokeDasharray = `${CIRC} ${CIRC}`;
+        ring.style.strokeDashoffset = `${CIRC}`;
+
+        // State
+        let isFocus = true;
+        let isRunning = false;
+        let totalSeconds = Number(totalInput.value) || 1500;
+        let timeLeftSeconds = totalSeconds;
+        let endAtMs = null;
+        let rafId = null;
+        let tickInterval = null;
+
+        function fmt(s) {
+            const m = Math.floor(s / 60);
+            const sec = s % 60;
+            return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+        }
+
+        function setRing(progress01) {
+            const p = Math.min(1, Math.max(0, progress01));
+            ring.style.strokeDashoffset = String(CIRC * (1 - p));
+        }
+
+        function paintStatic() {
+            sessionLabel.textContent = isFocus ? 'Focus' : 'Break';
+            ring.style.stroke = isFocus ? getComputedStyle(document.documentElement).getPropertyValue('--focus') : getComputedStyle(document.documentElement).getPropertyValue('--break');
+            timeLabel.textContent = fmt(timeLeftSeconds);
+            setRing(1 - (timeLeftSeconds / totalSeconds));
+        }
+
+        function animateRaf() {
+            if (!isRunning || !endAtMs) { paintStatic(); return; }
+            const now = Date.now();
+            const remainMs = Math.max(0, endAtMs - now);
+            const remain = Math.round(remainMs / 1000);
+            timeLeftSeconds = remain;
+            timeLabel.textContent = fmt(remain);
+            setRing(1 - (remain / totalSeconds));
+            if (remain <= 0) { stop(); return; }
+            rafId = requestAnimatiognFrame(animateRaf);
+        }
+
+        function animateStep() {
+            // Fallback: update once per second from timeLeftSeconds
+            clearInterval(tickInterval);
+            tickInterval = setInterval(() => {
+                if (!isRunning) return;
+                timeLeftSeconds = Math.max(0, timeLeftSeconds - 1);
+                paintStatic();
+                if (timeLeftSeconds <= 0) stop();
+            }, 1000);
+        }
+
+        function start() {
+            if (isRunning) return;
+            isRunning = true;
+            if (useEndAtEl.checked) {
+                endAtMs = Date.now() + timeLeftSeconds * 1000;
+                cancelAnimationFrame(rafId);
+                rafId = requestAnimationFrame(animateRaf);
+            } else {
+                animateStep();
+            }
+        }
+
+        function pause() {
+            if (!isRunning) return;
+            isRunning = false;
+            if (useEndAtEl.checked) {
+                // freeze timeLeftSeconds from current progression
+                const now = Date.now();
+                const remainMs = Math.max(0, endAtMs - now);
+                timeLeftSeconds = Math.round(remainMs / 1000);
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            } else {
+                clearInterval(tickInterval);
+            }
+            paintStatic();
+        }
+
+        function stop() {
+            isRunning = false;
+            cancelAnimationFrame(rafId); rafId = null;
+            clearInterval(tickInterval); tickInterval = null;
+            timeLeftSeconds = 0;
+            paintStatic();
+        }
+
+        function reset(applyInput = true) {
+            isRunning = false;
+            cancelAnimationFrame(rafId); rafId = null;
+            clearInterval(tickInterval); tickInterval = null;
+            if (applyInput) totalSeconds = Math.max(10, Number(totalInput.value) || 1500);
+            timeLeftSeconds = totalSeconds;
+            endAtMs = null;
+            paintStatic();
+        }
+
+        function toggleSession() {
+            isFocus = !isFocus;
+            // (Optional) different defaults for testing:
+            // totalSeconds = isFocus ? 1500 : 300;
+            // timeLeftSeconds = totalSeconds;
+            paintStatic();
+        }
+
+        // Wire up UI
+        startBtn.addEventListener('click', start);
+        pauseBtn.addEventListener('click', pause);
+        resetBtn.addEventListener('click', () => reset(true));
+        toggleBtn.addEventListener('click', () => { pause(); toggleSession(); });
+
+        totalInput.addEventListener('change', () => { reset(true); });
+
+        // First paint
+        paintStatic();
+    </script>
+</body>
+
+</html>
