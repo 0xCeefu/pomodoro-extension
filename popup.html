@@ -9,7 +9,16 @@
 <body>
     <div class="container">
         <h1>Pomodoro Timer</h1>
-        <p id="timer">00:03</p>
+        <div class="clock">
+            <svg viewBox="0 0 120 120" class="ring" aria-hidden="true">
+                <circle cx="60" cy="60" r="54" class="track"></circle>
+                <circle cx="60" cy="60" r="54" class="progress" id="progress-ring"></circle>
+            </svg>
+            <div class="center">
+                <div id="session-label">Focus</div>
+                <p id="timer">00:00</p>
+            </div>
+        </div>
         <label>Focus (min): <input type="number" id="focus-duration" value="0.1" step="0.1" min="0.1"></label><br>
         <label>Break (min): <input type="number" id="break-duration" value="0.1" step="0.1" min="0.1"></label><br>
         <label>Long Break (min): <input type="number" id="long-break-duration" value="0.1" step="0.1" min="0.1"></label><br>
