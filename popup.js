@@ -23,6 +23,7 @@ let timeLeft = 0;
 let pomodoroActive = false;
 let soundOff = false;
 let timerInterval = null;
+let totalTime = 0;
 
 // Initial ring dash config
 ring.style.strokeDasharray = `${CIRC} ${CIRC}`;
@@ -60,11 +61,11 @@ async function restoreTimeLeft() {
     } else {
         timeLeft = focusDuration * 60; // Default to focus duration if no stored time
     }
-    updateUI(timeLeft, pomodoroActive);
+    updateUI(timeLeft, pomodoroActive, totalTime, isFocus);
 }
 
 async function restoreUserSettings() {
-    let settings = await chrome.storage.sync.get(['focusDurationDefault', 'breakDurationDefault', 'pomodoroActiveStored', 'longBreakDuration', 'completedPomodoros', 'pomodorosBeforeLongBreak', 'soundOff']);
+    let settings = await chrome.storage.sync.get(['focusDurationDefault', 'breakDurationDefault', 'pomodoroActiveStored', 'longBreakDuration', 'completedPomodoros', 'pomodorosBeforeLongBreak', 'soundOff', 'isFocus', 'totalTime']);
     if (settings.focusDurationDefault) {
         focusDuration = settings.focusDurationDefault;
         focusDurationInput.value = focusDuration;
@@ -91,6 +92,15 @@ async function restoreUserSettings() {
     if (settings.soundOff !== undefined) {
         soundOff = settings.soundOff;
         soundOffButton.classList.toggle('active', soundOff);
+    }
+    if (settings.isFocus !== undefined) {
+        isFocus = settings.isFocus;
+        sessionLabel.textContent = isFocus ? 'Focus' : 'Break';
+        console.log(`Restored isFocus: ${isFocus}`);
+    }
+    if (settings.totalTime !== undefined) {
+        totalTime = settings.totalTime;
+        console.log(`Restored totalTime: ${totalTime}`);
     }
     // console.log(`Restored user settings: Focus Duration - ${focusDuration}, Break Duration - ${breakDuration}, Pomodoro Active - ${pomodoroActive}`);
 }
