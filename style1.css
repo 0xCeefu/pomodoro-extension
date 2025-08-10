@@ -1,8 +1,0 @@
-.clock { position: relative; width: 160px; height: 160px; display:grid; place-items:center; }
-.ring { width: 100%; height: 100%; transform: rotate(-90deg); }
-.track { fill: none; stroke: #e6e6e6; stroke-width: 10; }
-.progress { fill: none; stroke: #4f46e5; stroke-width: 10; stroke-linecap: round; transition: stroke 200ms ease; }
-
-.center { position:absolute; text-align:center; }
-#session-label { font: 600 12px/1.2 system-ui; opacity:.7; margin-bottom:4px; }
-#time-label { font: 700 24px/1 system-ui; }

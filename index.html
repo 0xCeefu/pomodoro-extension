@@ -227,7 +227,7 @@
             timeLabel.textContent = fmt(remain);
             setRing(1 - (remain / totalSeconds));
             if (remain <= 0) { stop(); return; }
-            rafId = requestAnimatiognFrame(animateRaf);
+            rafId = requestAnimationFrame(animateRaf);
         }
 
         function animateStep() {

@@ -41,6 +41,7 @@ async function startTimer(reqIsFocus, reqFocusDuration, reqBreakDuration, reqLon
     chrome.storage.sync.set({ pomodoroActiveStored: pomodoroActive }).then(() => {
         console.log(`Pomodoro active: ${pomodoroActive}`);
     });
+    sendMsgToUpdateUI();
 
     // Start the timer interval
     timerInterval = setInterval(() => {
@@ -54,6 +55,8 @@ async function startTimer(reqIsFocus, reqFocusDuration, reqBreakDuration, reqLon
 
         // If timeLeft reaches 0, clear the interval and switch focus/break state and start a new timer
         if (timeLeft <= 0) {
+            sendMsgToUpdateUI();
+            chrome.storage.sync.set({ timeLeftStored: 0 });
             clearInterval(timerInterval);
             timerInterval = null;
             if (isFocus) {
@@ -69,7 +72,9 @@ async function startTimer(reqIsFocus, reqFocusDuration, reqBreakDuration, reqLon
                 console.warn('No receiver for updateCompletedPomodoros — popup may be closed.');
             });
             isFocus = !isFocus;
-            startTimer(isFocus);
+            setTimeout(() => {
+                startTimer(isFocus);
+            }, 500);
         }
     }, 1000);
 }
@@ -83,7 +88,9 @@ async function sendMsgToUpdateUI() {
     chrome.runtime.sendMessage({
         action: 'updateTimerDisplay',
         timeLeft: timeLeft,
-        pomodoroActive: pomodoroActive
+        pomodoroActive: pomodoroActive,
+        isFocus: isFocus,
+        totalTime: isFocus ? focusDuration * 60 : (completedPomodoros > 0 && completedPomodoros % pomodorosBeforeLongBreak === 0 ? longBreakDuration * 60 : breakDuration * 60)
     }).catch((error) => {
         console.warn('No receiver for updateUI — popup may be closed.');
     });
