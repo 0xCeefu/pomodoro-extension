@@ -1,3 +1,17 @@
+@font-face {
+  font-family: 'Ubuntu Mono';
+  font-style: normal;
+  font-weight: 400;
+  src: url(/assets/fonts/UbuntuMono-Regular.ttf) format('ttf');
+}
+
+@font-face {
+  font-family: 'Ubuntu Mono';
+  font-style: normal;
+  font-weight: 700;
+  src: url(/assets/fonts/UbuntuMono-Bold.ttf) format('ttf');
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -10,6 +24,14 @@
     --break: #fa0000ff;
     /* Red color for breaks */
     --track: #e6e6e6;
+}
+
+body {
+    font-family: 'Ubuntu Mono', monospace;
+    background-color: #ffffff;
+    color: #333333;
+    text-align: center;
+    padding: 20px;
 }
 
 .container {
