@@ -43,6 +43,7 @@ body {
     min-height: 300px;
     background-color: #f0f0f0;
     padding: 20px;
+    gap: 10px;
 }
 
 .clock {
@@ -92,18 +93,6 @@ body {
     letter-spacing: 0.5px;
 }
 
-button {
-    margin: 10px;
-    padding: 10px;
-    border-radius: 5px;
-    border: none;
-    cursor: pointer;
-    font-size: 16px;
-    font-weight: bold;
-    color: white;
-    background-color: #007bff;
-}
-
 .sound-off {
     display: flex;
     align-items: center;
@@ -118,6 +107,11 @@ button {
     opacity: 0.8;
 }
 
+.sound-off img {
+    width: 40px;
+    height: 40px;
+}   
+
 .hidden {
     display: none;
 }
@@ -128,4 +122,48 @@ button {
 
 .sound-off.active img:last-child {
     display: inline-block;
+}
+
+.input_fields {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.input_fields label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: center;
+}
+
+input[type="number"] {
+    width: 60px;
+    padding: 5px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+}
+
+.control_btns {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.btn {
+    padding: 10px;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    color: white;
+    background-color: #007bff;
+    transition: all 0.3s ease;
+}
+
+.btn:hover, .btn:focus {
+    background-color: #0056b3;
 }
