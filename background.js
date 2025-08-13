@@ -35,7 +35,7 @@ async function startTimer(reqIsFocus, reqFocusDuration, reqBreakDuration, reqLon
 
     // Set the badge text to show the timer based on isFocus state
     chrome.action.setBadgeBackgroundColor(
-        { color: isFocus ? '#00FF00' : '#fa0000ff' }
+        { color: isFocus ? '#32E875' : '#E71D36' }
     );
 
     // Set storage for the current pomodoro state
