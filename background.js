@@ -146,11 +146,20 @@ async function setupOffscreenDocument(path) {
     }
 }
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     if (request.action === 'startPomodoro') {
         pomodoroActive = true;
         // Start the timer with the provided focus and break durations from the request
-        startTimer(request.isFocus, request.focusDuration, request.breakDuration, request.longBreakDuration, request.pomodorosBeforeLongBreak);
+        const storedValues = await queryAllStoredValues();
+        console.log('Stored values:', storedValues);
+        // Retrieve stored values or use defaults if not set
+        if (storedValues.timeLeftStored) {
+            timeLeft = storedValues.timeLeftStored;
+            startTimer(storedValues.isFocus, storedValues.focusDurationDefault, storedValues.breakDurationDefault, storedValues.longBreakDuration, storedValues.pomodorosBeforeLongBreak);
+        } else {
+            startTimer(request.isFocus, request.focusDuration, request.breakDuration, request.longBreakDuration, request.pomodorosBeforeLongBreak);
+        }
+
         sendResponse({ status: 'Pomodoro started' });
     } else if (request.action === 'stopPomodoro') {
         // Clear the timer and reset the timeInterval variable
@@ -186,3 +195,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ status: 'Unknown action' });
     }
 });
+
+
+async function queryAllStoredValues() {
+    return await chrome.storage.sync.get(null);
+}
+
+// console.log(queryAllStoredValues());
