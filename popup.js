@@ -13,224 +13,158 @@ const sessionLabel = document.getElementById('session-label');
 const R = 54;
 const CIRC = 2 * Math.PI * R;
 
+// State
 let isFocus = true;
-let focusDuration = focusDurationInput.value;
-let breakDuration = breakDurationInput.value;
-let longBreakDuration = longBreakDurationInput.value;
-let pomodorosBeforeLongBreak = pomodorosBeforeLongBreakInput.value;
+let focusDuration = parseFloat(focusDurationInput.value);
+let breakDuration = parseFloat(breakDurationInput.value);
+let longBreakDuration = parseFloat(longBreakDurationInput.value);
+let pomodorosBeforeLongBreak = parseInt(pomodorosBeforeLongBreakInput.value, 10);
 let completedPomodoros = 0;
 let timeLeft = 0;
 let pomodoroActive = false;
 let soundOff = false;
-let timerInterval = null;
 let totalTime = 0;
 
 // Initial ring dash config
 ring.style.strokeDasharray = `${CIRC} ${CIRC}`;
 ring.style.strokeDashoffset = `${CIRC}`;
 
+// Helper: Calculate session total time
+function getSessionTotalTime(isFocus, completedPomodoros, focusDuration, breakDuration, longBreakDuration, pomodorosBeforeLongBreak) {
+    if (isFocus) return focusDuration * 60;
+    if (completedPomodoros > 0 && completedPomodoros % pomodorosBeforeLongBreak === 0) return longBreakDuration * 60;
+    return breakDuration * 60;
+}
+
+// Helper: Set ring progress
 function setRing(progress01) {
     const p = Math.min(1, Math.max(0, progress01));
     ring.style.strokeDashoffset = String(CIRC * (1 - p));
 }
 
+// Helper: Paint static UI
 function paintStatic(isFocus, timeLeftSeconds, totalSeconds) {
-    console.log(timeLeftSeconds, totalSeconds);
     sessionLabel.textContent = isFocus ? 'Focus' : 'Break';
-    ring.style.stroke = isFocus ? getComputedStyle(document.documentElement).getPropertyValue('--focus') : getComputedStyle(document.documentElement).getPropertyValue('--break');
+    ring.style.stroke = isFocus
+        ? getComputedStyle(document.documentElement).getPropertyValue('--focus')
+        : getComputedStyle(document.documentElement).getPropertyValue('--break');
     setRing(1 - (timeLeftSeconds / totalSeconds));
 }
 
-function animateStep() {
-    // Fallback: update once per second from timeLeftSeconds
-    clearInterval(tickInterval);
-    tickInterval = setInterval(() => {
-        if (!isRunning) return;
-        timeLeftSeconds = Math.max(0, timeLeftSeconds - 1);
-        paintStatic();
-        if (timeLeftSeconds <= 0) stop();
-    }, 1000);
+// Helper: Update UI
+function updateUI(timeLeft, pomodoroActive, totalTime, isFocus) {
+    const minutes = Math.floor(timeLeft / 60);
+    const seconds = timeLeft % 60;
+    timer.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    if (pomodoroActive) {
+        paintStatic(isFocus, timeLeft, totalTime);
+    } else {
+        paintStatic(isFocus, focusDuration * 60, focusDuration * 60);
+    }
 }
 
-async function restoreTimeLeft() {
-    let storedTimeLeft = await chrome.storage.sync.get('timeLeftStored');
+// Helper: Update user settings in storage
+async function updateUserSettings(setting, value) {
+    await chrome.storage.sync.set({ [setting]: value });
+}
 
-    if (storedTimeLeft.timeLeftStored) {
-        timeLeft = storedTimeLeft.timeLeftStored;
-        // console.log(`Restored time left from popup: ${timeLeft}`);
+// Restore user settings from storage
+async function restoreUserSettings() {
+    let settings = await chrome.storage.sync.get(null);
+    console.log('Restored settings:', settings);
+    focusDuration = parseFloat(settings.defaultInputFocusDuration) || focusDuration;
+    focusDurationInput.value = focusDuration;
+    breakDuration = parseFloat(settings.defaultInputBreakDuration) || breakDuration;
+    breakDurationInput.value = breakDuration;
+    longBreakDuration = parseFloat(settings.defaultInputLongBreakDuration) || longBreakDuration;
+    longBreakDurationInput.value = longBreakDuration;
+    pomodorosBeforeLongBreak = parseInt(settings.defaultInputPomodorosBeforeLongBreak, 10) || pomodorosBeforeLongBreak;
+    pomodorosBeforeLongBreakInput.value = pomodorosBeforeLongBreak;
+    pomodoroActive = settings.pomodoroActive ?? pomodoroActive;
+    completedPomodoros = settings.completedPomodoros ?? completedPomodoros;
+    completedPomodorosDisplay.textContent = completedPomodoros;
+    soundOff = settings.soundOff ?? soundOff;
+    soundOffButton.classList.toggle('active', soundOff);
+    isFocus = settings.isFocus ?? isFocus;
+    sessionLabel.textContent = isFocus ? 'Focus' : 'Break';
+    timeLeft = settings.timeLeft ?? focusDuration * 60;
+    totalTime = getSessionTotalTime(isFocus, completedPomodoros, focusDuration, breakDuration, longBreakDuration, pomodorosBeforeLongBreak);
+}
+
+// Restore time left from storage
+async function restoreTimeLeft() {
+    let storedTimeLeft = await chrome.storage.sync.get('timeLeft');
+    if (storedTimeLeft.timeLeft) {
+        timeLeft = storedTimeLeft.timeLeft;
     } else {
-        timeLeft = focusDuration * 60; // Default to focus duration if no stored time
+        timeLeft = focusDuration * 60; // Default to focus duration if not set
     }
+    // timeLeft = storedTimeLeft.timeLeft ?? focusDuration * 60;
+    console.log('Restored time left:', timeLeft);
     updateUI(timeLeft, pomodoroActive, totalTime, isFocus);
 }
 
-async function restoreUserSettings() {
-    let settings = await chrome.storage.sync.get(['focusDurationDefault', 'breakDurationDefault', 'pomodoroActiveStored', 'longBreakDuration', 'completedPomodoros', 'pomodorosBeforeLongBreak', 'soundOff', 'isFocus', 'totalTime']);
-    if (settings.focusDurationDefault) {
-        focusDuration = settings.focusDurationDefault;
-        focusDurationInput.value = focusDuration;
-    }
-    if (settings.breakDurationDefault) {
-        breakDuration = settings.breakDurationDefault;
-        breakDurationInput.value = breakDuration;
-    }
-    if (settings.pomodoroActiveStored !== undefined) {
-        pomodoroActive = settings.pomodoroActiveStored;
-    }
-    if (settings.longBreakDuration) {
-        longBreakDuration = settings.longBreakDuration;
-        longBreakDurationInput.value = longBreakDuration;
-    }
-    if (settings.completedPomodoros !== undefined) {
-        completedPomodoros = settings.completedPomodoros;
-        completedPomodorosDisplay.textContent = completedPomodoros;
-    }
-    if (settings.pomodorosBeforeLongBreak !== undefined) {
-        pomodorosBeforeLongBreak = settings.pomodorosBeforeLongBreak;
-        pomodorosBeforeLongBreakInput.value = pomodorosBeforeLongBreak;
-    }
-    if (settings.soundOff !== undefined) {
-        soundOff = settings.soundOff;
-        soundOffButton.classList.toggle('active', soundOff);
-    }
-    if (settings.isFocus !== undefined) {
-        isFocus = settings.isFocus;
-        sessionLabel.textContent = isFocus ? 'Focus' : 'Break';
-        console.log(`Restored isFocus: ${isFocus}`);
-    }
-    if (settings.totalTime !== undefined) {
-        totalTime = settings.totalTime;
-        console.log(`Restored totalTime: ${totalTime}`);
-    }
-    // console.log(`Restored user settings: Focus Duration - ${focusDuration}, Break Duration - ${breakDuration}, Pomodoro Active - ${pomodoroActive}`);
-}
-
-async function updateUserSettings(setting, value) {
-    let update = await chrome.storage.sync.set({ [setting]: value });
-}
-
-function updateUI(timeLeft, pomodoroActive, totalTime, isFocus) {
-    if (pomodoroActive) {
-        // console.log(typeof (timeLeft));
-        const minutes = Math.floor(timeLeft / 60);
-        const seconds = timeLeft % 60;
-        pomodoroActive = pomodoroActive
-        // chrome.action.setBadgeText(
-        //     { text: `${minutes}:${seconds.toString().padStart(2, '0')}` }
-        // );
-        // console.log(`seconds: ${seconds}`);
-        // console.log(`minutes: ${minutes}`);
-        document.getElementById('timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        paintStatic(isFocus, timeLeft, totalTime);
-    } else {
-        const minutes = Math.floor((focusDuration * 60) / 60);
-        const seconds = (focusDuration * 60) % 60;
-        // console.log(`Updating UI: ${minutes}:${seconds.toString().padStart(2, '0')}`);
-        document.getElementById('timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    }
-}
-
-function updateTimerDisplay() {
-    if (pomodoroActive) {
-        const minutes = Math.floor(timeLeft / 60);
-        const seconds = timeLeft % 60;
-        chrome.action.setBadgeText(
-            { text: `${minutes}:${seconds.toString().padStart(2, '0')}` }
-        );
-        document.getElementById('timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    } else {
-        const minutes = Math.floor((focusDuration * 60) / 60);
-        const seconds = (focusDuration * 60) % 60;
-        document.getElementById('timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    }
-
-}
-
+// Event listeners
 startButton.addEventListener('click', async () => {
-    let response = await chrome.runtime.sendMessage({ action: 'startPomodoro', focusDuration, breakDuration, isFocus, longBreakDuration, pomodorosBeforeLongBreak });
-    // console.log(response);
+    await chrome.runtime.sendMessage({
+        action: 'startPomodoro',
+        focusDuration,
+        breakDuration,
+        isFocus,
+        longBreakDuration,
+        pomodorosBeforeLongBreak
+    });
 });
 
 stopButton.addEventListener('click', async () => {
-    let response = await chrome.runtime.sendMessage({ action: 'stopPomodoro' });
-    // console.log(response);
+    await chrome.runtime.sendMessage({ action: 'stopPomodoro' });
 });
 
 resetButton.addEventListener('click', async () => {
-    let response = await chrome.runtime.sendMessage({ action: 'resetPomodoro' });
-    // console.log(response);
+    await chrome.runtime.sendMessage({ action: 'resetPomodoro' });
 });
 
 focusDurationInput.addEventListener('change', () => {
-    focusDuration = focusDurationInput.value;
-    updateUserSettings('focusDurationDefault', focusDuration);
-    chrome.storage.sync.get('pomodoroActiveStored').then(data => {
-        const isActive = data.pomodoroActiveStored;
-        if (!isActive) {
-            console.log(isActive)
-            console.log(`Focus duration changed to: ${focusDuration}`);
-            updateUI(focusDuration * 60, isActive);
+    focusDuration = parseFloat(focusDurationInput.value);
+    updateUserSettings('defaultInputFocusDuration', focusDuration);
+    chrome.storage.sync.get('pomodoroActive').then(data => {
+        if (!data.pomodoroActive) {
+            updateUI(focusDuration * 60, false, focusDuration * 60, isFocus);
         }
     });
 });
 
 breakDurationInput.addEventListener('change', () => {
-    breakDuration = breakDurationInput.value;
-    updateUserSettings('breakDurationDefault', breakDuration);
-    chrome.storage.sync.get('pomodoroActiveStored').then(data => {
-        const isActive = data.pomodoroActiveStored;
-        if (!isActive) {
-            console.log(isActive)
-            console.log(`Break duration changed to: ${breakDuration}`);
-            updateUI(focusDuration * 60, isActive);
-        }
-    });
+    breakDuration = parseFloat(breakDurationInput.value);
+    updateUserSettings('defaultInputBreakDuration', breakDuration);
 });
 
 longBreakDurationInput.addEventListener('change', () => {
-    longBreakDuration = longBreakDurationInput.value;
-    updateUserSettings('longBreakDuration', longBreakDuration);
-    chrome.storage.sync.get('pomodoroActiveStored').then(data => {
-        const isActive = data.pomodoroActiveStored;
-        if (!isActive) {
-            console.log(isActive)
-            console.log(`Long break duration changed to: ${longBreakDuration}`);
-            updateUI(focusDuration * 60, isActive);
-        }
-    });
+    longBreakDuration = parseFloat(longBreakDurationInput.value);
+    updateUserSettings('defaultInputLongBreakDuration', longBreakDuration);
 });
 
 pomodorosBeforeLongBreakInput.addEventListener('change', () => {
-    pomodorosBeforeLongBreak = pomodorosBeforeLongBreakInput.value;
-    updateUserSettings('pomodorosBeforeLongBreak', pomodorosBeforeLongBreak);
-    chrome.storage.sync.get('pomodoroActiveStored').then(data => {
-        const isActive = data.pomodoroActiveStored;
-        if (!isActive) {
-            console.log(isActive)
-            console.log(`Pomodoros before long break changed to: ${pomodorosBeforeLongBreak}`);
-            updateUI(focusDuration * 60, isActive);
-        }
-    });
+    pomodorosBeforeLongBreak = parseInt(pomodorosBeforeLongBreakInput.value, 10);
+    updateUserSettings('defaultInputPomodorosBeforeLongBreak', pomodorosBeforeLongBreak);
 });
 
 soundOffButton.addEventListener('click', async () => {
     soundOffButton.classList.toggle('active');
     soundOff = !soundOff;
     updateUserSettings('soundOff', soundOff);
-})
+});
 
+// Message listener
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'updateTimerDisplay') {
-        // console.log('Received updateTimerDisplay message:', request);
         updateUI(request.timeLeft, request.pomodoroActive, request.totalTime, request.isFocus);
     } else if (request.action === 'queryStorageAndupdateUI') {
-        // console.log('Received queryStorageAndupdateUI message:', request);
         restoreUserSettings().then(() => {
             restoreTimeLeft();
-            setRing(0)
+            setRing(0);
         });
     } else if (request.action === 'updateCompletedPomodoros') {
-        // console.log('Received updateCompletedPomodoros message:', request);
         chrome.storage.sync.get('completedPomodoros').then(data => {
             completedPomodoros = data.completedPomodoros || 0;
             completedPomodorosDisplay.textContent = completedPomodoros;
@@ -238,5 +172,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
-restoreUserSettings()
-restoreTimeLeft()
+// Initial load
+async function loadOnUIOpen() {
+    await restoreUserSettings();
+    await restoreTimeLeft();
+}
+
+loadOnUIOpen();

@@ -1,138 +1,168 @@
 let timerInterval = null;
-let focusDuration = 0.1
+let focusDuration = 0.1;
 let breakDuration = 0.1;
 let longBreakDuration = 0.1;
-let pomodorosBeforeLongBreak = 4;
+let pomodorosBeforeLongBreak = 2;
 let isFocus = true;
 let timeLeft = 0;
 let pomodoroActive = false;
 let completedPomodoros = 0;
 let soundOff = false;
-let creating
+let creating = null;
 let totalTime = 0;
 
+// Initialize default settings
 chrome.runtime.onInstalled.addListener(() => {
-    chrome.storage.sync.set({ timeLeftStored: focusDuration * 60, focusDurationDefault: focusDuration, breakDurationDefault: breakDuration, pomodoroActiveStored: pomodoroActive, completedPomodoros: completedPomodoros, longBreakDuration: longBreakDuration, pomodorosBeforeLongBreak: pomodorosBeforeLongBreak, soundOff: soundOff, isFocus: isFocus, totalTime: totalTime }).then(() => {
-        console.log(`Time left stored: ${focusDuration * 60}\nFocus duration default: ${focusDuration}\nBreak duration default: ${breakDuration}\nPomodoro active stored: ${pomodoroActive}\nCompleted Pomodoros: ${completedPomodoros}\nLong Break Duration Default: ${longBreakDuration}\nPomodoros before Long Break: ${pomodorosBeforeLongBreak}\nSound Off: ${soundOff}\nIs Focus: ${isFocus}\nTotal Time: ${totalTime}`);
+    chrome.storage.sync.clear()
+    chrome.storage.sync.set({
+        defaultInputFocusDuration: focusDuration,
+        defaultInputBreakDuration: breakDuration,
+        defaultInputLongBreakDuration: longBreakDuration,
+        defaultInputPomodorosBeforeLongBreak: pomodorosBeforeLongBreak,
+        completedPomodoros: 0,
+        pomodoroActive: false,
+        isFocus: true,
+        soundOff: false,
+        timeLeft: 0,
+        bgSessionFocusDuration: focusDuration,
+        bgSessionBreakDuration: breakDuration,
+        bgSessionLongBreakDuration: longBreakDuration,
+        bgSessionPomodorosBeforeLongBreak: pomodorosBeforeLongBreak,
+    }).then(() => {
+        console.log('Default settings initialized in storage.');
     });
 });
 
-async function startTimer(reqIsFocus, reqFocusDuration, reqBreakDuration, reqLongBreakDuration, reqPomodorosBeforeLongBreak) {
-    // If the timer is already running, leave and do not start a new one
+// Helper: Calculate session total time
+function getSessionTotalTime(isFocus, completedPomodoros, focusDuration, breakDuration, longBreakDuration, pomodorosBeforeLongBreak) {
+    if (isFocus) return focusDuration * 60;
+    if (completedPomodoros > 0 && completedPomodoros % pomodorosBeforeLongBreak === 0) return longBreakDuration * 60;
+    return breakDuration * 60;
+}
+
+// Helper: Save session state to storage
+function saveSessionState() {
+    chrome.storage.sync.set({
+        pomodoroActive,
+        isFocus,
+        bgSessionFocusDuration: focusDuration,
+        bgSessionBreakDuration: breakDuration,
+        bgSessionLongBreakDuration: longBreakDuration,
+        bgSessionPomodorosBeforeLongBreak: pomodorosBeforeLongBreak,
+        totalTime,
+        timeLeft,
+        completedPomodoros
+    });
+}
+
+// Timer control
+function pauseTimer() {
+    clearInterval(timerInterval);
+    timerInterval = null;
+}
+
+// Main timer logic
+async function startTimer(pastPomodoro = false, reqIsFocus, reqFocusDuration, reqBreakDuration, reqLongBreakDuration, reqPomodorosBeforeLongBreak) {
     if (timerInterval) return;
 
-    if (timeLeft <= 0) {
-        // If timeLeft is 0, set it to the focus or break duration based on isFocus
-        isFocus = reqIsFocus
-        focusDuration = reqFocusDuration || focusDuration;
-        breakDuration = reqBreakDuration || breakDuration;
-        longBreakDuration = reqLongBreakDuration || longBreakDuration;
-        pomodorosBeforeLongBreak = reqPomodorosBeforeLongBreak || pomodorosBeforeLongBreak;
-        completedPomodoros = await chrome.storage.sync.get('completedPomodoros').then(data => data.completedPomodoros || 0);
-        console.log(`Starting timer with Focus Duration: ${focusDuration}, Break Duration: ${breakDuration}, Long Break Duration: ${longBreakDuration}, Pomodoros Before Long Break: ${pomodorosBeforeLongBreak}, Completed Pomodoros: ${completedPomodoros}`, (completedPomodoros > 0 && completedPomodoros % pomodorosBeforeLongBreak === 0));
-        timeLeft = isFocus ? focusDuration * 60 : ((completedPomodoros > 0 && completedPomodoros % pomodorosBeforeLongBreak === 0) ? longBreakDuration * 60 : breakDuration * 60);
+    if (pastPomodoro) {
+        // Restore previous session values from storage
+        let storedValues = await chrome.storage.sync.get([
+            'timeLeft',
+            'isFocus',
+            'bgSessionFocusDuration',
+            'bgSessionBreakDuration',
+            'bgSessionLongBreakDuration',
+            'bgSessionPomodorosBeforeLongBreak',
+            'completedPomodoros',
+        ]);
+        isFocus = storedValues.isFocus ?? isFocus;
+        focusDuration = storedValues.bgSessionFocusDuration ?? focusDuration;
+        breakDuration = storedValues.bgSessionBreakDuration ?? breakDuration;
+        longBreakDuration = storedValues.bgSessionLongBreakDuration ?? longBreakDuration;
+        pomodorosBeforeLongBreak = storedValues.bgSessionPomodorosBeforeLongBreak ?? pomodorosBeforeLongBreak;
+        completedPomodoros = storedValues.completedPomodoros ?? completedPomodoros;
+        timeLeft = storedValues.timeLeft ?? timeLeft;
+        pomodoroActive = true;
+        totalTime = getSessionTotalTime(isFocus, completedPomodoros, focusDuration, breakDuration, longBreakDuration, pomodorosBeforeLongBreak);
+    } else {
+        if (timeLeft <= 0) {
+            isFocus = reqIsFocus ?? isFocus;
+            focusDuration = reqFocusDuration ?? focusDuration;
+            breakDuration = reqBreakDuration ?? breakDuration;
+            longBreakDuration = reqLongBreakDuration ?? longBreakDuration;
+            pomodorosBeforeLongBreak = reqPomodorosBeforeLongBreak ?? pomodorosBeforeLongBreak;
+            completedPomodoros = await chrome.storage.sync.get('completedPomodoros').then(data => data.completedPomodoros ?? 0);
+            totalTime = getSessionTotalTime(isFocus, completedPomodoros, focusDuration, breakDuration, longBreakDuration, pomodorosBeforeLongBreak);
+            timeLeft = totalTime;
+            pomodoroActive = true;
+        }
+        saveSessionState();
     }
 
-    // Set the badge text to show the timer based on isFocus state
-    chrome.action.setBadgeBackgroundColor(
-        { color: isFocus ? '#32E875' : '#E71D36' }
-    );
-
-    // Set storage for the current pomodoro state
-    chrome.storage.sync.set({ pomodoroActiveStored: pomodoroActive, isFocus: isFocus, totalTime: isFocus ? focusDuration * 60 : (completedPomodoros > 0 && completedPomodoros % pomodorosBeforeLongBreak === 0 ? longBreakDuration * 60 : breakDuration * 60) }).then(() => {
-        console.log(`Pomodoro active: ${pomodoroActive}`);
-    });
+    chrome.action.setBadgeBackgroundColor({ color: isFocus ? '#32E875' : '#E71D36' });
     sendMsgToUpdateUI();
 
-    // Start the timer interval
     timerInterval = setInterval(() => {
-        // Decrement timeLeft every second and send a message to update the UI
         timeLeft--;
         sendMsgToUpdateUI();
-        // Store the time left in sync storage
-        chrome.storage.sync.set({ timeLeftStored: timeLeft }).then(() => {
-            // console.log(`Time left stored: ${timeLeft}`);
-        });
+        chrome.storage.sync.set({ timeLeft });
 
-        // If timeLeft reaches 0, clear the interval and switch focus/break state and start a new timer
         if (timeLeft <= 0) {
             sendMsgToUpdateUI();
-            chrome.storage.sync.set({ timeLeftStored: 0 });
-            clearInterval(timerInterval);
-            timerInterval = null;
+            pauseTimer();
             if (isFocus) {
                 completedPomodoros++;
-                chrome.storage.sync.set({ completedPomodoros: completedPomodoros }).then(() => {
-                    console.log(`Completed Pomodoros: ${completedPomodoros}`);
-                });
+                chrome.storage.sync.set({ completedPomodoros });
             }
             showNotification(`Pomodoro ${isFocus ? "Focus" : ((completedPomodoros > 0 && completedPomodoros % pomodorosBeforeLongBreak === 0) ? "Long Break" : "Break")} session complete!`);
-            chrome.runtime.sendMessage({
-                action: 'updateCompletedPomodoros',
-            }).catch((error) => {
-                console.warn('No receiver for updateCompletedPomodoros — popup may be closed.');
-            });
+            chrome.runtime.sendMessage({ action: 'updateCompletedPomodoros' }).catch(() => {});
             isFocus = !isFocus;
+            chrome.storage.sync.set({ timeLeft: 0, isFocus });
             setTimeout(() => {
-                startTimer(isFocus);
+                startTimer(false, isFocus);
             }, 500);
         }
     }, 1000);
 }
 
+// UI update
 async function sendMsgToUpdateUI() {
     const minutes = Math.floor(timeLeft / 60);
     const seconds = timeLeft % 60;
-    chrome.action.setBadgeText(
-        { text: `${minutes}:${seconds.toString().padStart(2, '0')}` }
-    );
+    chrome.action.setBadgeText({ text: `${minutes}:${seconds.toString().padStart(2, '0')}` });
     chrome.runtime.sendMessage({
         action: 'updateTimerDisplay',
-        timeLeft: timeLeft,
-        pomodoroActive: pomodoroActive,
-        isFocus: isFocus,
-        totalTime: isFocus ? focusDuration * 60 : (completedPomodoros > 0 && completedPomodoros % pomodorosBeforeLongBreak === 0 ? longBreakDuration * 60 : breakDuration * 60)
-    }).catch((error) => {
-        console.warn('No receiver for updateUI — popup may be closed.');
-    });
+        timeLeft,
+        pomodoroActive,
+        isFocus,
+        totalTime
+    }).catch(() => {});
 }
 
+// Notification logic
 async function showNotification(message) {
-    soundOff = await chrome.storage.sync.get('soundOff').then(data => data.soundOff || false);
+    soundOff = await chrome.storage.sync.get('soundOff').then(data => data.soundOff ?? false);
     if (!soundOff) {
-        await setupOffscreenDocument('offscreen.html')
-        let response = chrome.runtime.sendMessage({
-            action: 'playAudioNotification'
-        }).catch((error) => {
-            console.warn('No receiver for playAudioNotification — offscreen document may not be set up.');
-        });
-
-        console.log('Audio notification response:', response);
-    } else {
-        console.log('Audio notification is turned off.');
+        await setupOffscreenDocument('offscreen.html');
+        chrome.runtime.sendMessage({ action: 'playAudioNotification' }).catch(() => {});
     }
     chrome.notifications.create({
         type: "basic",
         title: "Pomodoro Timer",
-        message: message,
-        iconUrl: "assets/icons/icon128.png"
+        message,
+        iconUrl: chrome.runtime.getURL("assets/icons/icon128.png")
     });
 }
 
+// Offscreen document setup
 async function setupOffscreenDocument(path) {
-    // Check all windows controlled by the service worker to see if one
-    // of them is the offscreen document with the given path
     const offscreenUrl = chrome.runtime.getURL(path);
     const existingContexts = await chrome.runtime.getContexts({
         contextTypes: ['OFFSCREEN_DOCUMENT'],
         documentUrls: [offscreenUrl]
     });
-
-    if (existingContexts.length > 0) {
-        return;
-    }
-
-    // create offscreen document
+    if (existingContexts.length > 0) return;
     if (creating) {
         await creating;
     } else {
@@ -146,59 +176,37 @@ async function setupOffscreenDocument(path) {
     }
 }
 
+// Message listener
 chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     if (request.action === 'startPomodoro') {
-        pomodoroActive = true;
-        // Start the timer with the provided focus and break durations from the request
-        const storedValues = await queryAllStoredValues();
-        console.log('Stored values:', storedValues);
-        // Retrieve stored values or use defaults if not set
-        if (storedValues.timeLeftStored) {
-            timeLeft = storedValues.timeLeftStored;
-            startTimer(storedValues.isFocus, storedValues.focusDurationDefault, storedValues.breakDurationDefault, storedValues.longBreakDuration, storedValues.pomodorosBeforeLongBreak);
+        let isPastPomodoro = await chrome.storage.sync.get('pomodoroActive').then(data => data.pomodoroActive ?? false);
+        if (isPastPomodoro) {
+            startTimer(true);
         } else {
-            startTimer(request.isFocus, request.focusDuration, request.breakDuration, request.longBreakDuration, request.pomodorosBeforeLongBreak);
+            startTimer(false, request.isFocus, request.focusDuration, request.breakDuration, request.longBreakDuration, request.pomodorosBeforeLongBreak);
         }
-
         sendResponse({ status: 'Pomodoro started' });
     } else if (request.action === 'stopPomodoro') {
-        // Clear the timer and reset the timeInterval variable
-        clearInterval(timerInterval);
-        timerInterval = null;
+        pauseTimer();
         sendResponse({ status: 'Pomodoro stopped' });
     } else if (request.action === 'resetPomodoro') {
-        // Clear the timer and timeInterval variable
-        clearInterval(timerInterval);
-        timerInterval = null;
-        // Reset timeLeft, pomodoroActive, and isFocus
+        pauseTimer();
         timeLeft = 0;
         pomodoroActive = false;
         isFocus = true;
-        // Update the UI
+        completedPomodoros = 0;
         sendMsgToUpdateUI();
-        // Reset the badge text and store the reset values
         chrome.action.setBadgeText({ text: '' });
-        chrome.storage.sync.set({ timeLeftStored: 0, pomodoroActiveStored: pomodoroActive, completedPomodoros: 0, isFocus: true }).then(() => {
-            console.log(`Time left reset to: ${0}\nPomodoro active reset to: ${pomodoroActive}`);
-        });
-        // Notify the popup to update its UI
-        chrome.runtime.sendMessage({
-            action: 'queryStorageAndupdateUI',
-        }).catch((error) => {
-            console.warn('No receiver for updateUI — popup may be closed.');
-        });
-        // Show a notification to indicate the reset
+        chrome.storage.sync.set({ timeLeft: 0, pomodoroActive, completedPomodoros, isFocus });
+        chrome.runtime.sendMessage({ action: 'queryStorageAndupdateUI' }).catch(() => {});
         showNotification("Pomodoro timer has been reset.");
         sendResponse({ status: 'Pomodoro reset' });
     } else {
-        console.warn('Unknown action:', request.action);
         sendResponse({ status: 'Unknown action' });
     }
 });
 
-
+// Utility: Query all stored values
 async function queryAllStoredValues() {
     return await chrome.storage.sync.get(null);
 }
-
-// console.log(queryAllStoredValues());
