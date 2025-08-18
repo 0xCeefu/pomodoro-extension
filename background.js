@@ -21,6 +21,8 @@ chrome.runtime.onInstalled.addListener(() => {
         defaultInputPomodorosBeforeLongBreak: pomodorosBeforeLongBreak,
         completedPomodoros: 0,
         pomodoroActive: false,
+        isRunning: false,
+        endAtEpochMs: 0,
         isFocus: true,
         soundOff: false,
         timeLeft: 0,
@@ -56,9 +58,10 @@ function saveSessionState() {
 }
 
 // Timer control
-function pauseTimer() {
+async function pauseTimer() {
     clearInterval(timerInterval);
     timerInterval = null;
+    await chrome.storage.sync.set({ isRunning: false, timeLeft });
 }
 
 // Main timer logic
@@ -101,14 +104,18 @@ async function startTimer(pastPomodoro = false, reqIsFocus, reqFocusDuration, re
     }
 
     chrome.action.setBadgeBackgroundColor({ color: isFocus ? '#32E875' : '#E71D36' });
+    const endAtEpochMs = Date.now() + timeLeft * 1000;
+    await chrome.storage.sync.set({ 
+        endAtEpochMs, 
+        isRunning: true 
+    });
     sendMsgToUpdateUI();
 
     timerInterval = setInterval(() => {
-        timeLeft--;
+        timeLeft = Math.max(0, timeLeft - 1);
         sendMsgToUpdateUI();
-        chrome.storage.sync.set({ timeLeft });
 
-        if (timeLeft <= 0) {
+        if (timeLeft === 0) {
             sendMsgToUpdateUI();
             pauseTimer();
             if (isFocus) {
@@ -197,13 +204,15 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         completedPomodoros = 0;
         sendMsgToUpdateUI();
         chrome.action.setBadgeText({ text: '' });
-        chrome.storage.sync.set({ timeLeft: 0, pomodoroActive, completedPomodoros, isFocus });
+        chrome.storage.sync.set({ timeLeft: 0, pomodoroActive, completedPomodoros, isFocus, isRunning: false, endAtEpochMs: 0 }).catch(() => {});
         chrome.runtime.sendMessage({ action: 'queryStorageAndupdateUI' }).catch(() => {});
         showNotification("Pomodoro timer has been reset.");
         sendResponse({ status: 'Pomodoro reset' });
     } else {
         sendResponse({ status: 'Unknown action' });
     }
+
+    return true; // Keep the message channel open for sendResponse
 });
 
 // Utility: Query all stored values

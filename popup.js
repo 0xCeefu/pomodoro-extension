@@ -22,8 +22,10 @@ let pomodorosBeforeLongBreak = parseInt(pomodorosBeforeLongBreakInput.value, 10)
 let completedPomodoros = 0;
 let timeLeft = 0;
 let pomodoroActive = false;
+let isRunning = false;
 let soundOff = false;
 let totalTime = 0;
+let endAtEpochMs = 0;
 
 // Initial ring dash config
 ring.style.strokeDasharray = `${CIRC} ${CIRC}`;
@@ -71,7 +73,7 @@ async function updateUserSettings(setting, value) {
 // Restore user settings from storage
 async function restoreUserSettings() {
     let settings = await chrome.storage.sync.get(null);
-    console.log('Restored settings:', settings);
+    
     focusDuration = parseFloat(settings.defaultInputFocusDuration) || focusDuration;
     focusDurationInput.value = focusDuration;
     breakDuration = parseFloat(settings.defaultInputBreakDuration) || breakDuration;
@@ -86,21 +88,28 @@ async function restoreUserSettings() {
     soundOff = settings.soundOff ?? soundOff;
     soundOffButton.classList.toggle('active', soundOff);
     isFocus = settings.isFocus ?? isFocus;
+    isRunning = settings.isRunning ?? isRunning;
     sessionLabel.textContent = isFocus ? 'Focus' : 'Break';
     timeLeft = settings.timeLeft ?? focusDuration * 60;
+    endAtEpochMs = settings.endAtEpochMs ?? 0;
     totalTime = getSessionTotalTime(isFocus, completedPomodoros, focusDuration, breakDuration, longBreakDuration, pomodorosBeforeLongBreak);
 }
 
 // Restore time left from storage
 async function restoreTimeLeft() {
-    let storedTimeLeft = await chrome.storage.sync.get('timeLeft');
-    if (storedTimeLeft.timeLeft) {
-        timeLeft = storedTimeLeft.timeLeft;
+    
+    if (timeLeft) {
+        if (isRunning && endAtEpochMs) {
+            const remainingTime = Math.max(0, Math.floor((endAtEpochMs - Date.now()) / 1000));
+            timeLeft = remainingTime;
+        } else {
+            // If not running, restore the stored time left
+            timeLeft = timeLeft;
+        }
     } else {
         timeLeft = focusDuration * 60; // Default to focus duration if not set
     }
     // timeLeft = storedTimeLeft.timeLeft ?? focusDuration * 60;
-    console.log('Restored time left:', timeLeft);
     updateUI(timeLeft, pomodoroActive, totalTime, isFocus);
 }
 
