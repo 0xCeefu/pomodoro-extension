@@ -73,7 +73,7 @@ async function updateUserSettings(setting, value) {
 // Restore user settings from storage
 async function restoreUserSettings() {
     let settings = await chrome.storage.sync.get(null);
-    
+
     focusDuration = parseFloat(settings.defaultInputFocusDuration) || focusDuration;
     focusDurationInput.value = focusDuration;
     breakDuration = parseFloat(settings.defaultInputBreakDuration) || breakDuration;
@@ -134,6 +134,9 @@ resetButton.addEventListener('click', async () => {
 });
 
 focusDurationInput.addEventListener('change', () => {
+    if (focusDurationInput.value < 1) {
+        focusDurationInput.value = 1;
+    }
     focusDuration = parseFloat(focusDurationInput.value);
     updateUserSettings('defaultInputFocusDuration', focusDuration);
     chrome.storage.sync.get('pomodoroActive').then(data => {
@@ -144,16 +147,25 @@ focusDurationInput.addEventListener('change', () => {
 });
 
 breakDurationInput.addEventListener('change', () => {
+    if (breakDurationInput.value < 1) {
+        breakDurationInput.value = 1;
+    }
     breakDuration = parseFloat(breakDurationInput.value);
     updateUserSettings('defaultInputBreakDuration', breakDuration);
 });
 
 longBreakDurationInput.addEventListener('change', () => {
+    if (longBreakDurationInput.value < 1) {
+        longBreakDurationInput.value = 1;
+    }
     longBreakDuration = parseFloat(longBreakDurationInput.value);
     updateUserSettings('defaultInputLongBreakDuration', longBreakDuration);
 });
 
 pomodorosBeforeLongBreakInput.addEventListener('change', () => {
+    if (pomodorosBeforeLongBreakInput.value < 1) {
+        pomodorosBeforeLongBreakInput.value = 1;
+    }
     pomodorosBeforeLongBreak = parseInt(pomodorosBeforeLongBreakInput.value, 10);
     updateUserSettings('defaultInputPomodorosBeforeLongBreak', pomodorosBeforeLongBreak);
 });
